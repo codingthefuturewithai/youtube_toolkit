@@ -10,6 +10,23 @@ This toolkit enables AI assistants to:
 - Identify content gaps and opportunities
 - Track channel performance over time
 
+## Claude Code Custom Commands
+
+This toolkit includes powerful Claude Code slash commands in the `.claude/commands/` directory that automate common YouTube analysis workflows:
+
+- **/analyze-channel** - Comprehensive channel analysis with metrics, content strategy insights, and growth opportunities
+- **/research-niche** - Research successful content in any YouTube niche to understand what works
+- **/compare-creators** - Compare teaching styles and content approaches between multiple videos
+- **/track-performance** - Track channel performance trends over time with detailed analytics
+- **/find-content-gaps** - Identify underserved topics and content opportunities in your niche
+
+To use these commands in Claude Code:
+1. Ensure the MCP server is installed and configured (see Quick Start below)
+2. Type `/` in Claude Code to see available commands
+3. Example: `/analyze-channel "UCBJycsmduvYEL83R_U4JriQ"`
+
+These commands handle all the complexity of data fetching, analysis, and report generation automatically.
+
 ## Quick Start for MCP Clients
 
 ### 1. Install the MCP server (Recommended)
@@ -365,6 +382,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 Tim Kitchens - timkitch@codingthefuture.ai
 
----
-
-**[➡️ FINAL REMINDER: Replace all sections marked with ➡️ with content specific to your MCP server. Remove this reminder when done.]**
