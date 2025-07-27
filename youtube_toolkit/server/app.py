@@ -44,7 +44,14 @@ def register_tools(mcp_server: FastMCP) -> None:
     # YouTube Video Tools
     @mcp_server.tool(
         name="youtube_get_video_metadata",
-        description="Fetch metadata for a single YouTube video including title, channel, duration, and statistics"
+        description="""Fetch comprehensive metadata for a YouTube video.
+
+Parameters:
+- video_id (required): YouTube video ID or full URL (e.g., 'dQw4w9WgXcQ' or 'https://youtube.com/watch?v=dQw4w9WgXcQ')
+- include_statistics (optional, default: true): Include view/like/comment counts
+
+Returns: Video title, description, channel info with subscriber count, duration, thumbnails, tags, category, privacy status, and statistics
+API quota cost: 3 units"""
     )
     def youtube_get_video_metadata_tool(
         video_id: str,
@@ -55,7 +62,20 @@ def register_tools(mcp_server: FastMCP) -> None:
 
     @mcp_server.tool(
         name="youtube_get_video_transcript",
-        description="Fetch and cache video transcript with smart extraction options (full, analysis, intro_only, outro_only)"
+        description="""Fetch and intelligently cache video transcripts with flexible extraction modes.
+
+Parameters:
+- video_id (required): YouTube video ID or URL
+- extract_mode (optional, default: 'full'): 
+  * 'full': Complete transcript with timestamps
+  * 'analysis': Intro (first 60s) + outro (last 60s) + 3 main content samples
+  * 'intro_only': First 60 seconds only
+  * 'outro_only': Last 60 seconds only
+- use_cache (optional, default: true): Use cached transcript if available
+- delay_seconds (optional, default: 10): Seconds to wait before scraping (minimum 1s recommended to avoid IP blocking)
+
+Returns: Transcript text with timing data, metadata including cache status
+Note: Uses web scraping; delays prevent IP blocking by YouTube"""
     )
     def youtube_get_video_transcript_tool(
         video_id: str,
@@ -69,7 +89,18 @@ def register_tools(mcp_server: FastMCP) -> None:
     # YouTube Channel Tools
     @mcp_server.tool(
         name="youtube_get_channel_videos",
-        description="List recent videos from a YouTube channel with optional transcript fetching"
+        description="""List recent videos from a YouTube channel with detailed metadata.
+
+Parameters:
+- channel_id (required): YouTube channel ID (must start with 'UC', e.g., 'UCuAXFkgsw1L7xaCfnd5JJOw')
+- max_results (optional, default: 10): Number of videos to return (1-50)
+- include_transcripts (optional, default: false): Fetch transcript for each video
+- use_cache (optional, default: true): Use cached transcripts when available
+- delay_seconds (optional, default: 10): Seconds to wait between transcript fetches (minimum 1s recommended to avoid IP blocking)
+
+Returns: Channel info with subscriber count, array of videos with metadata, transcript data if requested
+Note: Including transcripts significantly increases processing time. First video has no delay, subsequent videos use delay_seconds.
+API quota cost: 101+ units (1 channel + 100 search + details)"""
     )
     def youtube_get_channel_videos_tool(
         channel_id: str,
@@ -85,7 +116,16 @@ def register_tools(mcp_server: FastMCP) -> None:
     # YouTube Search Tools
     @mcp_server.tool(
         name="youtube_search_videos",
-        description="Search YouTube videos by query with sorting and filtering options"
+        description="""Search YouTube videos with sorting options.
+
+Parameters:
+- query (required): Search terms (e.g., 'python tutorial')
+- max_results (optional, default: 10): Number of results (1-50)
+- order (optional, default: 'relevance'): Sort by 'relevance', 'date', 'viewCount', or 'rating'
+- published_after (optional): ISO 8601 date string (e.g., '2024-01-01T00:00:00Z')
+
+Returns: Search query echo, array of video results with metadata including title, description, channel, duration, view count
+API quota cost: 100 units per search"""
     )
     def youtube_search_videos_tool(
         query: str,
@@ -98,7 +138,14 @@ def register_tools(mcp_server: FastMCP) -> None:
 
     @mcp_server.tool(
         name="youtube_get_channel_metadata",
-        description="Fetches detailed metadata for a YouTube channel including statistics, branding, and status"
+        description="""Fetch comprehensive channel information including statistics, branding, and configuration.
+
+Parameters:
+- channel_id (required): Channel ID, username, or handle (e.g., 'UCBJycsmduvYEL83R_U4JriQ', 'mkbhd', '@mkbhd')
+
+Returns: Channel title, handle, custom URL, description, country, creation date, statistics (subscribers, views, video count), branding (keywords, banner URL), content playlists, and channel status
+
+API quota cost: 3 units (direct ID) or 103 units (username/handle lookup requires search)"""
     )
     def youtube_get_channel_metadata_tool(
         channel_id: str

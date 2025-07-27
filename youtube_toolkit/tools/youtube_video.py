@@ -197,6 +197,11 @@ def youtube_get_video_transcript(
         if delay_seconds is None:
             delay_seconds = config.default_transcript_delay
         
+        # Enforce minimum delay to avoid IP blocking
+        if delay_seconds < 1.0:
+            logger.warning(f"Delay of {delay_seconds}s is too low, using minimum of 1.0s to avoid IP blocking")
+            delay_seconds = 1.0
+        
         # Check cache
         cache = TranscriptCache()
         cached_data = None
