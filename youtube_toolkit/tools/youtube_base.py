@@ -29,8 +29,10 @@ class TranscriptCache:
     
     def __init__(self):
         config = load_config()
-        self.cache_dir = Path(config.transcript_cache_dir)
-        self.cache_dir.mkdir(exist_ok=True)
+        # Expand user home directory (~) and make absolute
+        cache_dir_str = os.path.expanduser(config.transcript_cache_dir)
+        self.cache_dir = Path(cache_dir_str).resolve()
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.max_age_days = config.max_cache_age_days
     
     def get_cache_path(self, video_id: str) -> Path:
