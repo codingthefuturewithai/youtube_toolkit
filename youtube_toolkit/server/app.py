@@ -1,4 +1,4 @@
-"""MCP server implementation with Echo tool"""
+"""MCP server implementation for YouTube toolkit"""
 
 import asyncio
 import sys
@@ -10,8 +10,6 @@ from mcp.server.fastmcp import FastMCP
 
 from youtube_toolkit.config import ServerConfig, load_config
 from youtube_toolkit.logging_config import setup_logging, logger
-from youtube_toolkit.tools.echo import echo
-
 # YouTube tool imports
 from youtube_toolkit.tools.youtube_video import (
     youtube_get_video_metadata,
@@ -46,14 +44,6 @@ def create_mcp_server(config: Optional[ServerConfig] = None) -> FastMCP:
 
 def register_tools(mcp_server: FastMCP) -> None:
     """Register all MCP tools with the server"""
-
-    @mcp_server.tool(
-        name="echo",
-        description="Echo back the input text with optional case transformation",
-    )
-    def echo_tool(text: str, transform: Optional[str] = None) -> types.TextContent:
-        """Wrapper around the echo tool implementation"""
-        return echo(text, transform)
 
     # YouTube Video Tools
     @mcp_server.tool(
