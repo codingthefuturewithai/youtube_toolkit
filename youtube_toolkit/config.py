@@ -3,6 +3,10 @@
 import os
 from dataclasses import dataclass
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load .env file if it exists
+load_dotenv()
 
 @dataclass
 class ServerConfig:

@@ -13,7 +13,45 @@ from youtube_toolkit.tools.youtube_base import (
 from youtube_toolkit.config import load_config
 from youtube_toolkit.logging_config import logger
 
-def youtube_get_video_info(
+# Cache for video categories to avoid repeated API calls
+_category_cache = {}
+
+def _get_category_name(youtube, category_id: str) -> str:
+    """
+    Get category name from category ID, using cache when possible.
+    
+    Args:
+        youtube: YouTube API client instance
+        category_id: Category ID to look up
+        
+    Returns:
+        Category name or empty string if not found
+    """
+    if not category_id:
+        return ""
+        
+    # Check cache first
+    if category_id in _category_cache:
+        return _category_cache[category_id]
+    
+    try:
+        # Fetch category details
+        request = youtube.videoCategories().list(
+            part='snippet',
+            id=category_id
+        )
+        response = request.execute()
+        
+        if response.get('items'):
+            category_name = response['items'][0]['snippet']['title']
+            _category_cache[category_id] = category_name
+            return category_name
+    except Exception as e:
+        logger.warning(f"Failed to fetch category name for ID {category_id}: {e}")
+    
+    return ""
+
+def youtube_get_video_metadata(
     video_id: str,
     include_statistics: bool = True
 ) -> types.TextContent:
@@ -34,8 +72,8 @@ def youtube_get_video_info(
         # Get YouTube API client
         youtube = YouTubeAPIClient.get_instance()
         
-        # Build request parts
-        parts = ['snippet', 'contentDetails']
+        # Build request parts - need additional parts for v3 spec
+        parts = ['snippet', 'contentDetails', 'status']
         if include_statistics:
             parts.append('statistics')
         
@@ -50,38 +88,75 @@ def youtube_get_video_info(
             return types.TextContent(
                 type="text",
                 text=json.dumps({
-                    "error": "not_found",
-                    "message": f"Video {video_id} not found"
+                    "error": {
+                        "type": "not_found",
+                        "message": f"Video {video_id} not found"
+                    }
                 })
             )
         
-        # Extract video data
+        # Extract video data according to v3 spec
         video = response['items'][0]
+        snippet = video['snippet']
+        content_details = video['contentDetails']
+        status = video['status']
+        
+        # Build thumbnail structure
+        thumbnails = snippet.get('thumbnails', {})
+        thumbnail_obj = {
+            "default": thumbnails.get('default', {}).get('url', f"https://i.ytimg.com/vi/{video_id}/default.jpg"),
+            "medium": thumbnails.get('medium', {}).get('url', f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"),
+            "high": thumbnails.get('high', {}).get('url', f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"),
+            "standard": thumbnails.get('standard', {}).get('url', f"https://i.ytimg.com/vi/{video_id}/sddefault.jpg"),
+            "maxres": thumbnails.get('maxres', {}).get('url', f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg")
+        }
+        
+        # Get channel subscriber count (requires additional API call)
+        channel_request = youtube.channels().list(
+            part='statistics',
+            id=snippet['channelId']
+        )
+        channel_response = channel_request.execute()
+        subscriber_count = 0
+        if channel_response.get('items'):
+            subscriber_count = int(channel_response['items'][0]['statistics'].get('subscriberCount', 0))
+        
         result = {
             "video_id": video['id'],
-            "title": video['snippet']['title'],
-            "channel": video['snippet']['channelTitle'],
-            "channel_id": video['snippet']['channelId'],
-            "description": video['snippet']['description'],
-            "published_at": video['snippet']['publishedAt'],
-            "duration": video['contentDetails']['duration'],
-            "duration_seconds": parse_duration(video['contentDetails']['duration']),
-            "thumbnail": video['snippet']['thumbnails'].get('high', {}).get('url', ''),
-            "url": f"https://www.youtube.com/watch?v={video_id}"
-        }
-        
-        if include_statistics and 'statistics' in video:
-            result['statistics'] = {
-                "view_count": int(video['statistics'].get('viewCount', 0)),
-                "like_count": int(video['statistics'].get('likeCount', 0)),
-                "comment_count": int(video['statistics'].get('commentCount', 0))
+            "title": snippet['title'],
+            "description": snippet['description'],
+            "channel": {
+                "id": snippet['channelId'],
+                "title": snippet['channelTitle'],
+                "subscriber_count": subscriber_count
+            },
+            "published_at": snippet['publishedAt'],
+            "duration": content_details['duration'],
+            "duration_seconds": parse_duration(content_details['duration']),
+            "thumbnail": thumbnail_obj,
+            "tags": snippet.get('tags', []),
+            "category_id": snippet.get('categoryId', ''),
+            "category_name": _get_category_name(youtube, snippet.get('categoryId', '')),
+            "statistics": {
+                "view_count": int(video.get('statistics', {}).get('viewCount', 0)),
+                "like_count": int(video.get('statistics', {}).get('likeCount', 0)),
+                "dislike_count": None,  # YouTube removed dislike counts from API
+                "comment_count": int(video.get('statistics', {}).get('commentCount', 0))
+            } if include_statistics else None,
+            "privacy_status": status.get('privacyStatus', 'unknown'),
+            "embeddable": status.get('embeddable', False),
+            "live_broadcast_content": snippet.get('liveBroadcastContent', 'none'),
+            "default_language": snippet.get('defaultLanguage'),
+            "default_audio_language": snippet.get('defaultAudioLanguage'),
+            "_metadata": {
+                "api_quota_cost": 3,  # 1 for video + 1 for channel + potential category lookup
+                "fetched_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             }
-        
-        # Add metadata
-        result['_metadata'] = {
-            "api_calls": 1,
-            "cache_used": False
         }
+        
+        # Remove statistics if not requested
+        if not include_statistics:
+            del result['statistics']
         
         return types.TextContent(
             type="text",
@@ -178,18 +253,22 @@ def youtube_get_video_transcript(
                     return types.TextContent(
                         type="text",
                         text=json.dumps({
-                            "error": "no_transcript",
-                            "message": "No transcript available for this video",
-                            "video_id": video_id
+                            "error": {
+                                "type": "no_transcript",
+                                "message": "No transcript available for this video",
+                                "details": {"video_id": video_id}
+                            }
                         })
                     )
                 elif 'Could not retrieve' in error_msg or 'NoTranscriptFound' in error_msg:
                     return types.TextContent(
                         type="text",
                         text=json.dumps({
-                            "error": "transcript_blocked",
-                            "message": "Transcript blocked or unavailable",
-                            "video_id": video_id
+                            "error": {
+                                "type": "transcript_blocked",
+                                "message": "Transcript blocked or unavailable",
+                                "details": {"video_id": video_id}
+                            }
                         })
                     )
                 raise
@@ -215,8 +294,10 @@ def youtube_get_video_transcript(
         
         # Add metadata
         result['_metadata'] = {
+            "api_quota_cost": 0,  # No YouTube API calls, uses youtube-transcript-api
             "cache_hit": use_cache and cached_data is not None,
-            "extract_mode": extract_mode
+            "extract_mode": extract_mode,
+            "fetched_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         }
         
         return types.TextContent(

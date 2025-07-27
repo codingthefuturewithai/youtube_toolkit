@@ -1,6 +1,7 @@
 """YouTube channel tools"""
 import json
 import time
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from mcp import types
 from googleapiclient.errors import HttpError
@@ -15,6 +16,7 @@ def youtube_get_channel_videos(
     channel_id: str,
     max_results: int = 10,
     include_transcripts: bool = False,
+    use_cache: bool = True,
     delay_seconds: Optional[float] = None
 ) -> types.TextContent:
     """
@@ -24,6 +26,7 @@ def youtube_get_channel_videos(
         channel_id: YouTube channel ID (starts with UC...)
         max_results: Maximum number of videos to return
         include_transcripts: Fetch transcripts for each video
+        use_cache: Whether to use cached transcripts (only applies when include_transcripts is True)
         delay_seconds: Delay between transcript fetches
     
     Returns:
@@ -35,7 +38,7 @@ def youtube_get_channel_videos(
         
         # First, get channel info
         channel_request = youtube.channels().list(
-            part='snippet,statistics',
+            part='snippet,statistics,brandingSettings',
             id=channel_id
         )
         channel_response = channel_request.execute()
@@ -44,8 +47,10 @@ def youtube_get_channel_videos(
             return types.TextContent(
                 type="text",
                 text=json.dumps({
-                    "error": "not_found",
-                    "message": f"Channel {channel_id} not found"
+                    "error": {
+                        "type": "not_found",
+                        "message": f"Channel {channel_id} not found"
+                    }
                 })
             )
         
@@ -93,16 +98,36 @@ def youtube_get_channel_videos(
             details_lookup = {}
         
         # Format response
+        snippet = channel_info['snippet']
+        statistics = channel_info['statistics']
+        
+        # Build custom URL if available
+        custom_url = None
+        if 'customUrl' in snippet:
+            custom_url = f"https://youtube.com/@{snippet['customUrl']}"
+        elif 'brandingSettings' in channel_info and 'channel' in channel_info['brandingSettings']:
+            if 'customUrl' in channel_info['brandingSettings']['channel']:
+                custom_url = f"https://youtube.com/{channel_info['brandingSettings']['channel']['customUrl']}"
+        
         result = {
             "channel": {
                 "id": channel_info['id'],
-                "title": channel_info['snippet']['title'],
-                "description": channel_info['snippet']['description'],
-                "subscriber_count": int(channel_info['statistics'].get('subscriberCount', 0)),
-                "video_count": int(channel_info['statistics'].get('videoCount', 0))
+                "title": snippet['title'],
+                "description": snippet['description'],
+                "subscriber_count": int(statistics.get('subscriberCount', 0)),
+                "view_count": int(statistics.get('viewCount', 0)),
+                "video_count": int(statistics.get('videoCount', 0)),
+                "created_at": snippet.get('publishedAt', ''),
+                "country": snippet.get('country', ''),
+                "custom_url": custom_url,
+                "thumbnail_url": snippet.get('thumbnails', {}).get('high', {}).get('url', '')
             },
             "videos": []
         }
+        
+        # Track transcript statistics
+        transcripts_fetched = 0
+        transcripts_cached = 0
         
         # Process each video
         for i, video in enumerate(videos[:max_results]):
@@ -110,16 +135,18 @@ def youtube_get_channel_videos(
             details = details_lookup.get(video_id, {})
             
             video_data = {
-                "id": video_id,
+                "video_id": video_id,
                 "title": video['snippet']['title'],
                 "description": video['snippet']['description'],
                 "published_at": video['snippet']['publishedAt'],
-                "url": f"https://www.youtube.com/watch?v={video_id}",
-                "thumbnail": video['snippet']['thumbnails'].get('high', {}).get('url', ''),
                 "duration": details.get('contentDetails', {}).get('duration', ''),
                 "duration_seconds": parse_duration(details.get('contentDetails', {}).get('duration', '')),
+                "thumbnail_url": video['snippet']['thumbnails'].get('high', {}).get('url', ''),
                 "view_count": int(details.get('statistics', {}).get('viewCount', 0)),
-                "like_count": int(details.get('statistics', {}).get('likeCount', 0))
+                "like_count": int(details.get('statistics', {}).get('likeCount', 0)),
+                "comment_count": int(details.get('statistics', {}).get('commentCount', 0)),
+                "url": f"https://www.youtube.com/watch?v={video_id}",
+                "transcript": None
             }
             
             # Fetch transcript if requested
@@ -129,31 +156,51 @@ def youtube_get_channel_videos(
                 
                 logger.info(f"Fetching transcript {i+1}/{len(videos[:max_results])} for: {video_data['title'][:50]}...")
                 
-                # Get transcript using analysis mode to save space
+                # Get transcript using full mode as per v3 spec
                 transcript_response = youtube_get_video_transcript(
                     video_id,
-                    extract_mode="analysis",
-                    use_cache=True,
+                    extract_mode="full",
+                    use_cache=use_cache,
                     delay_seconds=transcript_delay
                 )
                 
                 transcript_data = json.loads(transcript_response.text)
                 
                 if 'error' not in transcript_data:
-                    video_data['transcript_analysis'] = transcript_data
+                    # Check if transcript was cached (by examining metadata)
+                    if '_metadata' in transcript_data and transcript_data['_metadata'].get('cache_hit', False):
+                        transcripts_cached += 1
+                    else:
+                        transcripts_fetched += 1
+                    
+                    # Set transcript to the full text
+                    video_data['transcript'] = transcript_data.get('text', '')
                 else:
-                    video_data['transcript_error'] = transcript_data['error']
+                    # Keep transcript as null on error
+                    logger.warning(f"Failed to get transcript for {video_id}: {transcript_data['error']}")
+                    
                     # Stop if rate limited
-                    if 'blocked' in transcript_data.get('error', ''):
+                    error_info = transcript_data['error']
+                    if isinstance(error_info, dict) and 'blocked' in error_info.get('type', ''):
                         logger.warning("Rate limit detected, stopping transcript fetching")
                         break
             
             result['videos'].append(video_data)
         
         # Add metadata
+        # Calculate API quota cost:
+        # - channels.list: 1 unit
+        # - search.list: 100 units per request (we might make multiple)
+        # - videos.list: 1 unit
+        search_requests = ((len(videos) - 1) // 50) + 1 if videos else 0
+        api_quota_cost = 1 + (100 * search_requests) + (1 if video_ids else 0)
+        
         result['_metadata'] = {
-            "api_calls": 2 + (1 if video_ids else 0),  # channel + search + details
-            "transcripts_fetched": sum(1 for v in result['videos'] if 'transcript_analysis' in v)
+            "api_quota_cost": api_quota_cost,
+            "videos_returned": len(result['videos']),
+            "transcripts_fetched": transcripts_fetched,
+            "transcripts_cached": transcripts_cached,
+            "fetched_at": datetime.utcnow().isoformat() + "Z"
         }
         
         return types.TextContent(
@@ -168,165 +215,164 @@ def youtube_get_channel_videos(
             text=json.dumps(format_error_response(e))
         )
 
-def youtube_analyze_channel_style(
-    channel_id: str,
-    max_videos: int = 5,
-    save_profile: bool = True,
-    profile_path: Optional[str] = None
+def youtube_get_channel_metadata(
+    channel_id: str
 ) -> types.TextContent:
     """
-    Perform comprehensive channel analysis for content style profiling.
+    Fetches detailed metadata for a YouTube channel.
     
     Args:
-        channel_id: YouTube channel ID
-        max_videos: Number of recent videos to analyze
-        save_profile: Save creator profile to file
-        profile_path: Custom path for profile storage
+        channel_id: YouTube channel ID (starts with UC), username, or handle
     
     Returns:
-        Creator profile with style patterns, vocabulary, structure analysis
+        Comprehensive channel metadata including statistics, branding, and status
     """
     try:
-        logger.info(f"Starting channel style analysis for {channel_id}")
+        # Get YouTube API client
+        youtube = YouTubeAPIClient.get_instance()
         
-        # Get channel videos with transcripts
-        videos_response = youtube_get_channel_videos(
-            channel_id=channel_id,
-            max_results=max_videos,
-            include_transcripts=True,
-            delay_seconds=10.0  # Conservative delay for analysis
-        )
+        # Try to get channel by ID first, then by username or handle
+        channel_response = None
         
-        videos_data = json.loads(videos_response.text)
+        # First try as channel ID
+        if channel_id.startswith('UC') and len(channel_id) == 24:
+            request = youtube.channels().list(
+                part='snippet,statistics,status,brandingSettings,contentDetails',
+                id=channel_id
+            )
+            channel_response = request.execute()
         
-        if 'error' in videos_data:
-            return types.TextContent(type="text", text=json.dumps(videos_data))
+        # If not found or not a channel ID, try as username
+        if not channel_response or not channel_response.get('items'):
+            # Try as username without @
+            username = channel_id.lstrip('@')
+            request = youtube.channels().list(
+                part='snippet,statistics,status,brandingSettings,contentDetails',
+                forUsername=username
+            )
+            channel_response = request.execute()
         
-        # Analyze patterns
-        channel_info = videos_data['channel']
-        videos_with_transcripts = [
-            v for v in videos_data['videos'] 
-            if 'transcript_analysis' in v
-        ]
+        # If still not found, try as handle (custom URL)
+        if not channel_response or not channel_response.get('items'):
+            # Search for channel by handle
+            search_request = youtube.search().list(
+                part='snippet',
+                q=channel_id,
+                type='channel',
+                maxResults=1
+            )
+            search_response = search_request.execute()
+            
+            if search_response.get('items'):
+                found_channel_id = search_response['items'][0]['snippet']['channelId']
+                # Now get full channel info
+                request = youtube.channels().list(
+                    part='snippet,statistics,status,brandingSettings,contentDetails',
+                    id=found_channel_id
+                )
+                channel_response = request.execute()
         
-        if not videos_with_transcripts:
+        if not channel_response or not channel_response.get('items'):
             return types.TextContent(
                 type="text",
                 text=json.dumps({
-                    "error": "no_transcripts",
-                    "message": "No videos with available transcripts found"
+                    "error": {
+                        "type": "channel_not_found",
+                        "message": f"Channel '{channel_id}' not found"
+                    }
                 })
             )
         
-        # Extract patterns
-        intro_phrases = []
-        outro_phrases = []
-        vocabulary_freq = {}
-        total_words = 0
+        channel = channel_response['items'][0]
         
-        for video in videos_with_transcripts:
-            analysis = video['transcript_analysis']
-            
-            # Collect intro phrases
-            if analysis.get('intro'):
-                intro_text = ' '.join([e['text'] for e in analysis['intro']])
-                intro_phrases.append(intro_text)
-            
-            # Collect outro phrases
-            if analysis.get('outro'):
-                outro_text = ' '.join([e['text'] for e in analysis['outro']])
-                outro_phrases.append(outro_text)
-            
-            # Analyze vocabulary from samples
-            for sample in analysis.get('main_samples', []):
-                words = sample['text'].lower().split()
-                total_words += len(words)
-                for word in words:
-                    # Filter out common words
-                    if len(word) > 3:
-                        vocabulary_freq[word] = vocabulary_freq.get(word, 0) + 1
-        
-        # Find common patterns
-        common_intro_words = find_common_phrases(intro_phrases)
-        common_outro_words = find_common_phrases(outro_phrases)
-        
-        # Get top vocabulary
-        top_vocabulary = sorted(
-            vocabulary_freq.items(), 
-            key=lambda x: x[1], 
-            reverse=True
-        )[:50]
-        
-        # Build creator profile
-        creator_profile = {
-            "channel_id": channel_id,
-            "channel_name": channel_info['title'],
-            "analyzed_videos": len(videos_with_transcripts),
-            "analysis_date": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "style_patterns": {
-                "common_intro_phrases": common_intro_words,
-                "common_outro_phrases": common_outro_words,
-                "vocabulary": {
-                    "total_unique_words": len(vocabulary_freq),
-                    "total_words_analyzed": total_words,
-                    "top_words": dict(top_vocabulary)
+        # Build response matching v3 spec
+        result = {
+            "channel": {
+                "id": channel['id'],
+                "title": channel['snippet']['title'],
+                "handle": None,  # Will be set if available
+                "custom_url": None,  # Will be set if available
+                "description": channel['snippet']['description'],
+                "published_at": channel['snippet']['publishedAt'],
+                "country": channel['snippet'].get('country', None),
+                "statistics": {
+                    "subscriber_count": int(channel['statistics'].get('subscriberCount', 0)),
+                    "subscriber_count_hidden": channel['statistics'].get('hiddenSubscriberCount', False),
+                    "view_count": int(channel['statistics'].get('viewCount', 0)),
+                    "video_count": int(channel['statistics'].get('videoCount', 0))
+                },
+                "branding": {
+                    "keywords": [],  # Will be set if available
+                    "banner_url": None,  # Will be set if available
+                    "thumbnail_url": channel['snippet'].get('thumbnails', {}).get('high', {}).get('url', None)
+                },
+                "content_details": {
+                    "related_playlists": {}
+                },
+                "status": {
+                    "privacy_status": None,
+                    "is_linked": None,
+                    "long_uploads_status": None,
+                    "made_for_kids": None
                 }
             },
-            "content_structure": {
-                "avg_video_duration": sum(v['duration_seconds'] for v in videos_with_transcripts) / len(videos_with_transcripts),
-                "intro_style": "consistent" if len(set(common_intro_words[:3])) < 5 else "varied",
-                "outro_style": "consistent" if len(set(common_outro_words[:3])) < 5 else "varied"
-            },
-            "videos_analyzed": [
-                {
-                    "id": v['id'],
-                    "title": v['title'],
-                    "duration": v['duration_seconds']
-                }
-                for v in videos_with_transcripts
-            ]
+            "_metadata": {
+                "api_quota_cost": 3,  # channels.list costs 1, search might add 100
+                "fetched_at": datetime.utcnow().isoformat() + 'Z'
+            }
         }
         
-        # Save profile if requested
-        if save_profile:
-            from pathlib import Path
-            if profile_path:
-                profile_file = Path(profile_path)
-            else:
-                profile_dir = Path("creator_profiles")
-                profile_dir.mkdir(exist_ok=True)
-                profile_file = profile_dir / f"{channel_id}_profile.json"
+        # Extract handle from custom URL if available
+        if 'brandingSettings' in channel and 'channel' in channel['brandingSettings']:
+            branding = channel['brandingSettings']['channel']
             
-            with open(profile_file, 'w') as f:
-                json.dump(creator_profile, f, indent=2)
+            # Get keywords
+            if 'keywords' in branding:
+                # Keywords are space-separated, handle quoted phrases
+                keywords_str = branding['keywords']
+                # Simple parsing - could be improved for quoted phrases
+                result['channel']['branding']['keywords'] = keywords_str.split()
             
-            creator_profile['profile_saved_to'] = str(profile_file)
+            # Get custom URL/handle
+            if 'customUrl' in branding:
+                custom_url = branding['customUrl']
+                result['channel']['custom_url'] = f"https://youtube.com/{custom_url}"
+                # Extract handle (custom URL often starts with @)
+                if custom_url.startswith('@'):
+                    result['channel']['handle'] = custom_url
+                else:
+                    result['channel']['handle'] = '@' + custom_url.lstrip('/')
+        
+        # Get banner URL if available
+        if 'brandingSettings' in channel and 'image' in channel['brandingSettings']:
+            banner = channel['brandingSettings']['image'].get('bannerExternalUrl')
+            if banner:
+                result['channel']['branding']['banner_url'] = banner
+        
+        # Get content details
+        if 'contentDetails' in channel and 'relatedPlaylists' in channel['contentDetails']:
+            result['channel']['content_details']['related_playlists'] = channel['contentDetails']['relatedPlaylists']
+        
+        # Get status details
+        if 'status' in channel:
+            status = channel['status']
+            result['channel']['status']['privacy_status'] = status.get('privacyStatus')
+            result['channel']['status']['is_linked'] = status.get('isLinked')
+            result['channel']['status']['long_uploads_status'] = status.get('longUploadsStatus')
+            result['channel']['status']['made_for_kids'] = status.get('madeForKids')
+        
+        # If we did a search, add to quota cost
+        if not channel_id.startswith('UC'):
+            result['_metadata']['api_quota_cost'] = 103  # search (100) + channels (3)
         
         return types.TextContent(
             type="text",
-            text=json.dumps(creator_profile, indent=2)
+            text=json.dumps(result, indent=2)
         )
         
     except Exception as e:
-        logger.error(f"Error analyzing channel style: {e}")
+        logger.error(f"Error fetching channel metadata: {e}")
         return types.TextContent(
             type="text",
             text=json.dumps(format_error_response(e))
         )
-
-def find_common_phrases(phrases: List[str], min_length: int = 2) -> List[str]:
-    """Find common words/phrases across multiple texts"""
-    if not phrases:
-        return []
-    
-    # Simple word frequency analysis
-    word_freq = {}
-    for phrase in phrases:
-        words = phrase.lower().split()
-        for word in words:
-            if len(word) >= min_length:
-                word_freq[word] = word_freq.get(word, 0) + 1
-    
-    # Sort by frequency
-    sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
-    return [word for word, freq in sorted_words[:20]]

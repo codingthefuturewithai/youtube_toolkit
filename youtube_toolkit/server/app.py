@@ -14,12 +14,12 @@ from youtube_toolkit.tools.echo import echo
 
 # YouTube tool imports
 from youtube_toolkit.tools.youtube_video import (
-    youtube_get_video_info,
+    youtube_get_video_metadata,
     youtube_get_video_transcript
 )
 from youtube_toolkit.tools.youtube_channel import (
     youtube_get_channel_videos,
-    youtube_analyze_channel_style
+    youtube_get_channel_metadata
 )
 from youtube_toolkit.tools.youtube_search import youtube_search_videos
 from youtube_toolkit.tools.youtube_cache import (
@@ -57,15 +57,15 @@ def register_tools(mcp_server: FastMCP) -> None:
 
     # YouTube Video Tools
     @mcp_server.tool(
-        name="youtube_get_video_info",
+        name="youtube_get_video_metadata",
         description="Fetch metadata for a single YouTube video including title, channel, duration, and statistics"
     )
-    def youtube_get_video_info_tool(
+    def youtube_get_video_metadata_tool(
         video_id: str,
         include_statistics: bool = True
     ) -> types.TextContent:
         """Fetch YouTube video metadata"""
-        return youtube_get_video_info(video_id, include_statistics)
+        return youtube_get_video_metadata(video_id, include_statistics)
 
     @mcp_server.tool(
         name="youtube_get_video_transcript",
@@ -89,23 +89,12 @@ def register_tools(mcp_server: FastMCP) -> None:
         channel_id: str,
         max_results: int = 10,
         include_transcripts: bool = False,
+        use_cache: bool = True,
         delay_seconds: Optional[float] = None
     ) -> types.TextContent:
         """List videos from a YouTube channel"""
-        return youtube_get_channel_videos(channel_id, max_results, include_transcripts, delay_seconds)
+        return youtube_get_channel_videos(channel_id, max_results, include_transcripts, use_cache, delay_seconds)
 
-    @mcp_server.tool(
-        name="youtube_analyze_channel_style",
-        description="Perform comprehensive channel analysis for content style profiling"
-    )
-    def youtube_analyze_channel_style_tool(
-        channel_id: str,
-        max_videos: int = 5,
-        save_profile: bool = True,
-        profile_path: Optional[str] = None
-    ) -> types.TextContent:
-        """Analyze channel content style and patterns"""
-        return youtube_analyze_channel_style(channel_id, max_videos, save_profile, profile_path)
 
     # YouTube Search Tools
     @mcp_server.tool(
@@ -142,6 +131,16 @@ def register_tools(mcp_server: FastMCP) -> None:
     ) -> types.TextContent:
         """Clear transcript cache entries"""
         return youtube_clear_transcript_cache(video_id, older_than_days)
+
+    @mcp_server.tool(
+        name="youtube_get_channel_metadata",
+        description="Fetches detailed metadata for a YouTube channel including statistics, branding, and status"
+    )
+    def youtube_get_channel_metadata_tool(
+        channel_id: str
+    ) -> types.TextContent:
+        """Get detailed channel metadata"""
+        return youtube_get_channel_metadata(channel_id)
 
 
 # Create a server instance that can be imported by the MCP CLI

@@ -1,5 +1,6 @@
 """YouTube transcript cache management tools"""
 import json
+import time
 from typing import Optional
 from mcp import types
 from youtube_toolkit.tools.youtube_base import TranscriptCache
@@ -20,6 +21,12 @@ def youtube_get_transcript_cache_info(
     try:
         cache = TranscriptCache()
         info = cache.get_info(video_id)
+        
+        # Add metadata
+        info['_metadata'] = {
+            "api_quota_cost": 0,  # No API calls
+            "fetched_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        }
         
         return types.TextContent(
             type="text",
@@ -63,6 +70,12 @@ def youtube_clear_transcript_cache(
             result["video_id"] = video_id
         if older_than_days:
             result["older_than_days"] = older_than_days
+        
+        # Add metadata
+        result['_metadata'] = {
+            "api_quota_cost": 0,  # No API calls
+            "fetched_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        }
         
         logger.info(f"Cleared {cleared} cache entries")
         

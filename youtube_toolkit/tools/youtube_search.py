@@ -1,5 +1,6 @@
 """YouTube search tools"""
 import json
+import time
 from typing import Optional, Literal
 from mcp import types
 from youtube_toolkit.tools.youtube_base import (
@@ -109,7 +110,8 @@ def youtube_search_videos(
             "order": order,
             "results": results,
             "_metadata": {
-                "api_calls": 1 + (1 if video_ids else 0)
+                "api_quota_cost": 100,  # Search operation costs 100 units
+                "fetched_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             }
         }
         

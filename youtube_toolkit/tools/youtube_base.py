@@ -171,24 +171,32 @@ def format_error_response(error: Exception) -> Dict[str, Any]:
     if isinstance(error, HttpError):
         if error.resp.status == 403:
             return {
-                "error": "quota_exceeded",
-                "message": "YouTube API quota limit reached. Try again later.",
-                "retry_after": "24 hours"
+                "error": {
+                    "type": "quota_exceeded",
+                    "message": "YouTube API quota limit reached. Try again later.",
+                    "retry_after": 86400  # 24 hours in seconds
+                }
             }
         elif error.resp.status == 404:
             return {
-                "error": "not_found",
-                "message": "The requested resource was not found."
+                "error": {
+                    "type": "not_found",
+                    "message": "The requested resource was not found."
+                }
             }
         else:
             return {
-                "error": f"api_error_{error.resp.status}",
-                "message": str(error)
+                "error": {
+                    "type": f"api_error_{error.resp.status}",
+                    "message": str(error)
+                }
             }
     
     return {
-        "error": type(error).__name__,
-        "message": str(error)
+        "error": {
+            "type": type(error).__name__,
+            "message": str(error)
+        }
     }
 
 def extract_intro(transcript: List[Dict]) -> List[Dict]:
