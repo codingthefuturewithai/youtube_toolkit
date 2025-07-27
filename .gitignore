@@ -67,4 +67,16 @@ dmypy.json
 
 # Logs
 *.log
-logs/ 
+logs/
+
+# MCP specific
+transcript_cache/
+youtube-analysis/
+
+# Local development files
+test_*.py
+*_test.py
+test
+mcp-server-update-prompt.md
+youtube-analysis-slash-commands-prompt.md
+youtube-mcp-tools-spec-v3.md 

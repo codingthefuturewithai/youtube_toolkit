@@ -25,7 +25,7 @@ dependencies = [
 
 [project.scripts]
 # Single entry point for server that handles both transports
-youtube_toolkit-server = "youtube_toolkit.server.app:main"
+youtube-toolkit-server = "youtube_toolkit.server.app:main"
 
 [project.optional-dependencies]
 dev = [

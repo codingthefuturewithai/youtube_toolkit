@@ -2,7 +2,13 @@
 
 MCP server for YouTube content analysis, transcript extraction, and creator style profiling with intelligent caching and rate limit protection.
 
-**[➡️ REPLACE: Expand on the description above. What problems does it solve? What capabilities does it provide to AI tools?]**
+This toolkit enables AI assistants to:
+- Analyze YouTube channels and their content strategies
+- Extract video transcripts without rate limit issues (with intelligent caching)
+- Search YouTube and analyze trends in specific niches
+- Compare creator styles and teaching approaches
+- Identify content gaps and opportunities
+- Track channel performance over time
 
 ## Quick Start for MCP Clients
 
@@ -15,116 +21,162 @@ For the most reliable setup, first install the server as an isolated tool:
 uv tool install youtube_toolkit
 
 # Find the installed binary path
-which youtube_toolkit-server  # macOS/Linux
-where youtube_toolkit-server  # Windows
+which youtube-toolkit-server  # macOS/Linux
+where youtube-toolkit-server  # Windows
 ```
 
 ### 2. Configure your MCP client
 
-Add this configuration to your MCP client settings using the absolute path from step 1:
+#### For Claude Code (Recommended)
 
-**For Claude Desktop**: Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+Use the Claude Code CLI to add the YouTube toolkit:
 
-**For Cline**: Add to `.vscode/settings.json` in your project
+```bash
+# Using uvx (simplest, but may have dependency conflicts)
+claude mcp add youtube-toolkit --uvx youtube_toolkit
+
+# Or with full configuration including API key
+claude mcp add-json -s user youtube-toolkit '{"type":"stdio","command":"uvx","args":["youtube_toolkit"],"env":{"YOUTUBE_API_KEY":"your-api-key-here","TRANSCRIPT_CACHE_DIR":"~/youtube-transcript-cache","DEFAULT_TRANSCRIPT_DELAY":"10.0","MAX_CACHE_AGE_DAYS":"30"}}'
+
+# For isolated installation (most reliable)
+# First install: uv tool install youtube_toolkit
+# Then find path: which youtube-toolkit-server
+# Then add with absolute path:
+claude mcp add-json -s user youtube-toolkit '{"type":"stdio","command":"/path/to/youtube-toolkit-server","args":[],"env":{"YOUTUBE_API_KEY":"your-api-key-here"}}'
+```
+
+#### For Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+
+#### For Cline
+
+Add to `.vscode/settings.json` in your project
 
 ```json
 {
-  "youtube_toolkit": {
-    "command": "/absolute/path/to/youtube_toolkit-server"
+  "youtube-toolkit": {
+    "command": "/absolute/path/to/youtube-toolkit-server"
   }
 }
 ```
 
-**[➡️ REPLACE: If your server requires environment variables, show them here:]
 ```json
 {
-  "youtube_toolkit": {
-    "command": "/absolute/path/to/youtube_toolkit-server",
+  "youtube-toolkit": {
+    "command": "/absolute/path/to/youtube-toolkit-server",
     "env": {
-      "API_KEY": "your-api-key-here",
-      "BASE_URL": "https://api.example.com"
+      "YOUTUBE_API_KEY": "your-youtube-api-key-here",
+      "TRANSCRIPT_CACHE_DIR": "~/youtube-transcript-cache",
+      "DEFAULT_TRANSCRIPT_DELAY": "10.0",
+      "MAX_CACHE_AGE_DAYS": "30"
     }
   }
 }
 ```
-**[End of optional environment variables section]**
 
 **Alternative: Quick start with uvx** (may have dependency conflicts):
 ```json
 {
-  "youtube_toolkit": {
+  "youtube-toolkit": {
     "command": "uvx",
-    "args": ["youtube_toolkit-server"]
+    "args": ["CTF_Youtube_Toolkit"]
   }
 }
 ```
 
 ### 3. Get your credentials (if needed)
 
-**[➡️ REPLACE: If your server requires API keys or credentials, explain how to obtain them:]
-- **API Key**: Get from https://example.com/api-keys
-- **Base URL**: Your instance URL (e.g., https://api.example.com)
-**[End of optional credentials section]**
+- **YouTube API Key** (optional but recommended): Get from [Google Cloud Console](https://console.cloud.google.com/)
+  1. Create a new project or select existing
+  2. Enable YouTube Data API v3
+  3. Create credentials (API Key)
+  4. Restrict key to YouTube Data API v3 for security
+
+**Note**: The toolkit works without an API key by using transcript-only features, but channel/video metadata requires the API key.
 
 ### 4. Start using the tools
 
 Once configured, you can ask your AI assistant to:
-**[➡️ REPLACE: Add 2-3 example requests users might make:]
-- "Use the echo tool to test the connection"
-- "Transform 'hello world' to uppercase"
+- "Analyze the YouTube channel UCBJycsmduvYEL83R_U4JriQ"
+- "Research what content is succeeding in the Python programming niche"
+- "Compare teaching styles between these 3 YouTube videos: [URLs]"
+- "Find content gaps in the AI coding tools niche"
+- "Track performance trends for channel UCxxxxxx over the last 90 days"
 
 ## Features
 
-**[➡️ REPLACE: List the key features of your MCP server:]
-- Example echo tool with text transformation
+- YouTube channel analysis with comprehensive metrics
+- Transcript extraction with intelligent caching and rate limit protection
+- Video metadata fetching (views, likes, duration, etc.)
+- YouTube search with multiple sort options
+- Content gap identification and opportunity analysis
 - Support for both stdio and SSE transports
 - Comprehensive logging with automatic rotation
 - Cross-platform compatibility (Linux, macOS, Windows)
 
 ## Available Tools
 
-**[➡️ REPLACE: Document each tool your server provides. Follow this format for each tool:]
+### youtube_get_video_transcript
 
-### echo
-
-A simple tool for testing that echoes back the input text with optional transformations.
+Fetches and caches video transcripts with flexible extraction modes.
 
 **Parameters:**
-- `text` (required, string): The text to echo back
-- `transform` (optional, string): Transform to apply - either "upper" or "lower"
+- `video_id` (required): YouTube video ID or URL
+- `extract_mode` (optional, default: 'full'): 'full', 'analysis', 'intro_only', or 'outro_only'
+- `use_cache` (optional, default: true): Use cached transcript if available
+- `delay_seconds` (optional): Seconds to wait before scraping
 
 **Returns:**
-- JSON object containing:
-  - `text`: The echoed text (possibly transformed)
+- Transcript text with timing data and metadata including cache status
 
-**Examples:**
+### youtube_get_video_metadata
 
-Basic echo:
-```json
-// Request
-{
-  "text": "Hello, World!"
-}
+Fetches comprehensive metadata for a YouTube video.
 
-// Response
-{
-  "text": "Hello, World!"
-}
-```
+**Parameters:**
+- `video_id` (required): YouTube video ID or full URL
+- `include_statistics` (optional, default: true): Include view/like/comment counts
 
-With transformation:
-```json
-// Request
-{
-  "text": "Hello, World!",
-  "transform": "upper"
-}
+**Returns:**
+- Video title, description, channel info, duration, statistics, and more
 
-// Response
-{
-  "text": "HELLO, WORLD!"
-}
-```
+### youtube_get_channel_videos
+
+Lists recent videos from a YouTube channel with detailed metadata.
+
+**Parameters:**
+- `channel_id` (required): YouTube channel ID (must start with 'UC')
+- `max_results` (optional, default: 10): Number of videos to return (1-50)
+- `include_transcripts` (optional, default: false): Fetch transcript for each video
+- `use_cache` (optional, default: true): Use cached transcripts when available
+- `delay_seconds` (optional): Seconds between transcript fetches
+
+**Returns:**
+- Channel info with subscriber count, array of videos with metadata
+
+### youtube_search_videos
+
+Searches YouTube videos with sorting options.
+
+**Parameters:**
+- `query` (required): Search terms
+- `max_results` (optional, default: 10): Number of results (1-50)
+- `order` (optional, default: 'relevance'): Sort by 'relevance', 'date', 'viewCount', or 'rating'
+- `published_after` (optional): ISO 8601 date string
+
+**Returns:**
+- Array of video results with metadata
+
+### youtube_get_channel_metadata
+
+Fetches comprehensive channel information.
+
+**Parameters:**
+- `channel_id` (required): Channel ID, username, or handle
+
+**Returns:**
+- Channel title, statistics, branding, and configuration
 
 ## Alternative Configuration Methods
 
@@ -147,9 +199,9 @@ uv tool install youtube_toolkit
 # Find the installed binary location
 uv tool list | grep youtube_toolkit
 # Or on macOS/Linux:
-which youtube_toolkit-server
+which youtube-toolkit-server
 # Or on Windows:
-where youtube_toolkit-server
+where youtube-toolkit-server
 ```
 
 Then use this configuration with the absolute path:
@@ -198,11 +250,11 @@ uv tool list | grep youtube_toolkit
 
 # Platform-specific path discovery:
 # macOS/Linux:
-which youtube_toolkit-server
+which youtube-toolkit-server
 # Example output: /Users/username/.local/bin/youtube_toolkit-server
 
 # Windows:
-where youtube_toolkit-server
+where youtube-toolkit-server
 # Example output: C:\Users\username\.local\bin\youtube_toolkit-server.exe
 ```
 
@@ -230,24 +282,25 @@ Note: This requires the package to be published to PyPI. See [DEVELOPMENT.md](DE
 
 ### Common Issues
 
-**[➡️ REPLACE: Add common issues users might face. Here are some examples:]
-
 1. **"Tool not found" error**
    - Ensure the server is running and properly configured
-   - Check that the tool name is spelled correctly
+   - Check that the tool name is spelled correctly (e.g., `youtube_get_video_transcript`)
    - Verify your MCP client is connected to the server
 
-2. **Connection errors**
-   - Check that no other process is using port 3001 (for SSE transport)
-   - Verify your MCP client configuration is correct
-   - Try restarting your MCP client
+2. **No YouTube API key configured**
+   - The toolkit will still work but only transcript features will be available
+   - Channel and video metadata tools will return an error
+   - Add `YOUTUBE_API_KEY` to your environment configuration
 
-3. **Missing environment variables**
-   - Ensure all required environment variables are set in your configuration
-   - Check for typos in variable names
-   - Verify credentials are valid and not expired
+3. **Rate limit errors**
+   - Transcript fetching includes built-in delays to prevent rate limiting
+   - If you still hit limits, increase `DEFAULT_TRANSCRIPT_DELAY`
+   - Cached transcripts are used automatically when available
 
-**[End of examples - customize based on your server's specific issues]**
+4. **Cache directory issues**
+   - Ensure `TRANSCRIPT_CACHE_DIR` exists and is writable
+   - Default is `~/youtube-transcript-cache`
+   - Cache files older than `MAX_CACHE_AGE_DAYS` are automatically cleaned
 
 ### Dependency Conflicts
 
@@ -259,8 +312,8 @@ If you encounter dependency conflicts when using `uvx`:
    uv tool install youtube_toolkit
    
    # Find the binary path
-   which youtube_toolkit-server  # macOS/Linux
-   where youtube_toolkit-server  # Windows
+   which youtube-toolkit-server  # macOS/Linux
+   where youtube-toolkit-server  # Windows
    ```
 
 2. **Update your MCP client configuration** to use the absolute path from step 1
@@ -278,12 +331,9 @@ If you encounter dependency conflicts when using `uvx`:
 - Python 3.11 or 3.12
 - Operating Systems: Linux, macOS, Windows
 
-**[➡️ REPLACE: Add any additional requirements specific to your MCP server:]
-- Special system dependencies
-- External services or APIs needed
-- Network access requirements
-- Hardware requirements (if any)
-**[End of optional requirements]**
+- YouTube Data API v3 key (optional, for full functionality)
+- Internet access for YouTube API and transcript fetching
+- Write access to cache directory for transcript storage
 
 ## Logging
 
