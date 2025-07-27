@@ -20,10 +20,6 @@ from youtube_toolkit.tools.youtube_channel import (
     youtube_get_channel_metadata
 )
 from youtube_toolkit.tools.youtube_search import youtube_search_videos
-from youtube_toolkit.tools.youtube_cache import (
-    youtube_get_transcript_cache_info,
-    youtube_clear_transcript_cache
-)
 
 
 def create_mcp_server(config: Optional[ServerConfig] = None) -> FastMCP:
@@ -99,28 +95,6 @@ def register_tools(mcp_server: FastMCP) -> None:
     ) -> types.TextContent:
         """Search YouTube videos"""
         return youtube_search_videos(query, max_results, order, published_after)
-
-    # YouTube Cache Management Tools
-    @mcp_server.tool(
-        name="youtube_get_transcript_cache_info",
-        description="Get information about cached transcripts"
-    )
-    def youtube_get_transcript_cache_info_tool(
-        video_id: Optional[str] = None
-    ) -> types.TextContent:
-        """Get transcript cache information"""
-        return youtube_get_transcript_cache_info(video_id)
-
-    @mcp_server.tool(
-        name="youtube_clear_transcript_cache",
-        description="Clear transcript cache for one or all videos"
-    )
-    def youtube_clear_transcript_cache_tool(
-        video_id: Optional[str] = None,
-        older_than_days: Optional[int] = None
-    ) -> types.TextContent:
-        """Clear transcript cache entries"""
-        return youtube_clear_transcript_cache(video_id, older_than_days)
 
     @mcp_server.tool(
         name="youtube_get_channel_metadata",
