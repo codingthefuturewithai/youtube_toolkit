@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "youtube_toolkit"
+version = "0.1.0"
+description = "MCP server for YouTube content analysis, transcript extraction, and creator style profiling with intelligent caching and rate limit protection."
+readme = "README.md"
+authors = [
+    {name = "Tim Kitchens", email = "timkitch@codingthefuture.ai"}
+]
+license = {text = "MIT"}
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "mcp>=1.0.0",
+    "mcp[cli]>=1.0.0",
+    "anyio>=4.5",
+    "starlette>=0.36.0",
+    "uvicorn>=0.27.0",
+    "google-api-python-client>=2.108.0",
+    "youtube-transcript-api>=0.6.1",
+]
+
+[project.scripts]
+# Single entry point for server that handles both transports
+youtube_toolkit-server = "youtube_toolkit.server.app:main"
+youtube_toolkit-client = "youtube_toolkit.client.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["youtube_toolkit*"]
+namespaces = false 
