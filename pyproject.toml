@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "youtube_toolkit"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for YouTube content analysis, transcript extraction, and creator style profiling with intelligent caching and rate limit protection."
 readme = "README.md"
 authors = [

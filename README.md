@@ -29,75 +29,63 @@ These commands handle all the complexity of data fetching, analysis, and report 
 
 ## Quick Start for MCP Clients
 
-### 1. Install the MCP server (Recommended)
-
-For the most reliable setup, first install the server as an isolated tool:
+### 1. Install the MCP server
 
 ```bash
-# Install the MCP server
-uv tool install youtube_toolkit
-
-# Find the installed binary path
-which youtube-toolkit-server  # macOS/Linux
-where youtube-toolkit-server  # Windows
+# Install using uvx (recommended for stability)
+uvx --from youtube-toolkit youtube-toolkit-server
 ```
 
 ### 2. Configure your MCP client
 
-#### For Claude Code (Recommended)
-
-Use the Claude Code CLI to add the YouTube toolkit:
+#### For Claude Code
 
 ```bash
-# Using uvx (simplest, but may have dependency conflicts)
-claude mcp add youtube-toolkit --uvx youtube_toolkit
+# Add with automatic configuration
+claude mcp add youtube-toolkit --uvx youtube-toolkit
 
 # Or with full configuration including API key
-claude mcp add-json -s user youtube-toolkit '{"type":"stdio","command":"uvx","args":["youtube_toolkit"],"env":{"YOUTUBE_API_KEY":"your-api-key-here","TRANSCRIPT_CACHE_DIR":"~/youtube-transcript-cache","DEFAULT_TRANSCRIPT_DELAY":"10.0","MAX_CACHE_AGE_DAYS":"30"}}'
-
-# For isolated installation (most reliable)
-# First install: uv tool install youtube_toolkit
-# Then find path: which youtube-toolkit-server
-# Then add with absolute path:
-claude mcp add-json -s user youtube-toolkit '{"type":"stdio","command":"/path/to/youtube-toolkit-server","args":[],"env":{"YOUTUBE_API_KEY":"your-api-key-here"}}'
+claude mcp add-json -s user youtube-toolkit '{"type":"stdio","command":"uvx","args":["--from","youtube-toolkit","youtube-toolkit-server"],"env":{"YOUTUBE_API_KEY":"your-api-key-here","TRANSCRIPT_CACHE_DIR":"~/youtube-transcript-cache","DEFAULT_TRANSCRIPT_DELAY":"10.0","MAX_CACHE_AGE_DAYS":"30"}}'
 ```
 
 #### For Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
-
-#### For Cline
-
-Add to `.vscode/settings.json` in your project
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
-  "youtube-toolkit": {
-    "command": "/absolute/path/to/youtube-toolkit-server"
-  }
-}
-```
-
-```json
-{
-  "youtube-toolkit": {
-    "command": "/absolute/path/to/youtube-toolkit-server",
-    "env": {
-      "YOUTUBE_API_KEY": "your-youtube-api-key-here",
-      "TRANSCRIPT_CACHE_DIR": "~/youtube-transcript-cache",
-      "DEFAULT_TRANSCRIPT_DELAY": "10.0",
-      "MAX_CACHE_AGE_DAYS": "30"
+  "mcpServers": {
+    "youtube-toolkit": {
+      "command": "uvx",
+      "args": ["--from", "youtube-toolkit", "youtube-toolkit-server"],
+      "env": {
+        "YOUTUBE_API_KEY": "your-youtube-api-key-here",
+        "TRANSCRIPT_CACHE_DIR": "~/youtube-transcript-cache",
+        "DEFAULT_TRANSCRIPT_DELAY": "10.0",
+        "MAX_CACHE_AGE_DAYS": "30"
+      }
     }
   }
 }
 ```
 
-**Alternative: Quick start with uvx** (may have dependency conflicts):
+#### For Cline
+
+Add to `.vscode/settings.json` in your project:
+
 ```json
 {
-  "youtube-toolkit": {
-    "command": "uvx",
-    "args": ["CTF_Youtube_Toolkit"]
+  "cline.MCP.mcpServers": {
+    "youtube-toolkit": {
+      "command": "uvx",
+      "args": ["--from", "youtube-toolkit", "youtube-toolkit-server"],
+      "env": {
+        "YOUTUBE_API_KEY": "your-youtube-api-key-here",
+        "TRANSCRIPT_CACHE_DIR": "~/youtube-transcript-cache",
+        "DEFAULT_TRANSCRIPT_DELAY": "10.0",
+        "MAX_CACHE_AGE_DAYS": "30"
+      }
+    }
   }
 }
 ```
@@ -199,40 +187,13 @@ Fetches comprehensive channel information.
 
 ### Using a different MCP client
 
-The configuration above works for Claude Desktop and Cline. For other MCP clients:
+The configuration above works for Claude Desktop, Claude Code, and Cline. For other MCP clients:
 
-1. Use `uvx youtube_toolkit-server` as the command
+1. Use `uvx --from youtube-toolkit youtube-toolkit-server` as the command
 2. Set any required environment variables
 3. Consult your MCP client's documentation for specific configuration format
 
-### Using uv tool (Recommended for AI Assistants)
-
-For isolated installation that avoids dependency conflicts:
-
-```bash
-# Install as an isolated tool
-uv tool install youtube_toolkit
-
-# Find the installed binary location
-uv tool list | grep youtube_toolkit
-# Or on macOS/Linux:
-which youtube-toolkit-server
-# Or on Windows:
-where youtube-toolkit-server
-```
-
-Then use this configuration with the absolute path:
-```json
-{
-  "youtube_toolkit": {
-    "command": "/path/to/youtube_toolkit-server"
-  }
-}
-```
-
-**Note**: Replace `/path/to/` with the actual path from the commands above.
-
-### Running from source
+### Running from source (Development only)
 
 For development or testing from source code:
 
@@ -248,52 +209,6 @@ For development or testing from source code:
 }
 ```
 
-## Installation Options
-
-### Quick Start with uvx (Simplest)
-
-The configuration above using `uvx` will automatically download and run the server without installation. This is the simplest option but may have conflicts if you have other Python packages installed globally.
-
-### Isolated Installation with uv tool (Most Reliable)
-
-For a clean, isolated installation that prevents dependency conflicts:
-
-```bash
-# Install the MCP server as an isolated tool
-uv tool install youtube_toolkit
-
-# Verify installation and find the binary path
-uv tool list | grep youtube_toolkit
-
-# Platform-specific path discovery:
-# macOS/Linux:
-which youtube-toolkit-server
-# Example output: /Users/username/.local/bin/youtube_toolkit-server
-
-# Windows:
-where youtube-toolkit-server
-# Example output: C:\Users\username\.local\bin\youtube_toolkit-server.exe
-```
-
-**Important**: After installation, update your MCP client configuration to use the absolute path returned by the `which` or `where` command.
-
-### Install from Source (Development)
-
-For development or testing from source code:
-
-```bash
-git clone <repository-url>
-cd youtube_toolkit
-
-# Create and activate virtual environment
-uv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in development mode
-uv pip install -e .
-```
-
-Note: This requires the package to be published to PyPI. See [DEVELOPMENT.md](DEVELOPMENT.md#publishing-to-pypi) for publishing instructions.
 
 ## Troubleshooting
 
@@ -319,29 +234,25 @@ Note: This requires the package to be published to PyPI. See [DEVELOPMENT.md](DE
    - Default is `~/youtube-transcript-cache`
    - Cache files older than `MAX_CACHE_AGE_DAYS` are automatically cleaned
 
-### Dependency Conflicts
+### Server Connection Issues
 
-If you encounter dependency conflicts when using `uvx`:
+If the MCP server fails to connect:
 
-1. **Use isolated installation instead**:
+1. **Verify uvx is installed**:
    ```bash
-   # Install as an isolated tool to avoid conflicts
-   uv tool install youtube_toolkit
-   
-   # Find the binary path
-   which youtube-toolkit-server  # macOS/Linux
-   where youtube-toolkit-server  # Windows
+   # Install uv if needed
+   curl -LsSf https://astral.sh/uv/install.sh | sh  # macOS/Linux
+   # Or for Windows:
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
    ```
 
-2. **Update your MCP client configuration** to use the absolute path from step 1
-
-3. **If conflicts persist**, check for conflicting global packages:
+2. **Test the server directly**:
    ```bash
-   # List all globally installed packages
-   uv pip list
-   
-   # Consider using a virtual environment for development
+   # This should output "YouTube Toolkit MCP Server running"
+   uvx --from youtube-toolkit youtube-toolkit-server --version
    ```
+
+3. **Check your MCP client logs** for specific error messages
 
 ## Requirements
 
